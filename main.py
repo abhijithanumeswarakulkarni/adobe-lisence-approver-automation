@@ -8,6 +8,7 @@ import time
 import pandas as pd
 import shutil
 import os
+import sys
 
 # Configure Chrome to remain open
 chrome_options = webdriver.ChromeOptions()
@@ -17,124 +18,128 @@ chrome_options.add_argument("--profile-directory=Default")
 chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 chrome_options.add_experimental_option("detach", True)
 browser = webdriver.Chrome(options=chrome_options)
-
-print("Opening Wufoo and Extracting Students Info")
-browser.get(config.WUFOO_LOGIN_URL)  
-
 wait = WebDriverWait(browser, 10)
 
-def login():
-    print("Trying to login.")
+option = int(input("If you have manually downloaded the file press 1 else press 2: "))
+if(option == 2):
+    print("Opening Wufoo and Extracting Students Info")
+    browser.get(config.WUFOO_LOGIN_URL)  
 
-    # Step 1: Enter Email
-    print("Filling in Email...")
-    email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#emailInput")))
-    email_input.send_keys(config.EMAIL)
+    def login():
+        print("Trying to login.")
 
-    # Step 2: Enter Password
-    print("Filling in Password...")
-    pwd_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#passwordLogin")))
-    pwd_input.send_keys(config.PASSWORD)
+        # Step 1: Enter Email
+        print("Filling in Email...")
+        email_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#emailInput")))
+        email_input.send_keys(config.EMAIL)
 
-    # Step 3: Click Submit
-    print("Clicking Submit...")
-    submit = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#saveForm")))
-    submit.click()
+        # Step 2: Enter Password
+        print("Filling in Password...")
+        pwd_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#passwordLogin")))
+        pwd_input.send_keys(config.PASSWORD)
 
-    time.sleep(5)
+        # Step 3: Click Submit
+        print("Clicking Submit...")
+        submit = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#saveForm")))
+        submit.click()
 
-login()
-
-while True:
-    try:
-        print("Checking if login was successful.")
-        error_text = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#loginBlock > p.error")))
-        print("Error loging in. Retrying.")
         time.sleep(5)
-        login()
+
+    login()
+
+    while True:
+        try:
+            print("Checking if login was successful.")
+            error_text = wait.until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#loginBlock > p.error")))
+            print("Error loging in. Retrying.")
+            time.sleep(5)
+            login()
+        except Exception:
+            print("Login Successful. Proceeding to next step.")
+            break
+
+    print("Checking for modal popup...")
+
+    # Step 4: Check if modal exists and close it
+    try:
+        close_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Close Modal']")))
+        print("Modal detected. Closing it...")
+        close_button.click()
+    except:
+        print("No modal found.")
+    print("Proceeding with next steps.")
+
+    # Step 5: Accept terms and conditions
+    try:
+        time.sleep(3)
+        accept_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#onetrust-accept-btn-handler")))
+        accept_button.click()
+        time.sleep(1)
     except Exception:
-        print("Login Successful. Proceeding to next step.")
-        break
+        print("Terms pop up not present. Moving to next step.")
 
-print("Checking for modal popup...")
+    # Step 6: Search for rule
+    print("Checking if there is some content in the search bar.")
+    try:
+        search_bar_close = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-query-delete")))
+        search_bar_close.click()
+    except Exception:
+        print("No content in searchbar. Proceeding with next steps.")
+    search_bar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-bar")))
+    search_bar.send_keys(config.SEARCH_BAR_INPUT)
+    search_icon = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-query-icon")))
+    search_icon.click()
 
-# Step 4: Check if modal exists and close it
-try:
-    close_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-label='Close Modal']")))
-    print("Modal detected. Closing it...")
-    close_button.click()
-except:
-    print("No modal found.")
-print("Proceeding with next steps.")
+    # Step 7: Check for today's entries
+    entry_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#forms-action-entries-adobe-creative-cloud-access-spring-2025")))
+    entry_button.click()
 
-# Step 5: Accept terms and conditions
-try:
+    try:
+        # Ensure checkbox is visible before interacting
+        select_all_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#table-select-all")))
+
+        # Function to click and retry if checkbox is unchecked
+        def click_with_retry(element):
+            while not element.is_selected():
+                print("Element was not clicked, clicking again...")
+                # Attempt to click the checkbox
+                element.click()
+
+                # Retry clicking if the checkbox is not selected
+                time.sleep(3)  # Small delay to allow UI to update
+
+            # Confirm element is selected
+            print(f"Element checked status: {element.is_selected()}")
+
+        # Click the checkbox and retry if necessary
+        click_with_retry(select_all_button)
+
+        # Click Download
+        download_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#entries-bulk-download")))
+        download_button.click()
+
+        time.sleep(3)
+
+        # Wait for the download options container
+        download_options = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".download-options")))
+
+        # Click the second button (Excel)
+        excel_button = download_options.find_element(By.CSS_SELECTOR, "button:nth-child(1)")
+        excel_button.click()
+        print("Today's entries must be downloaded.")
+
+    except Exception:
+        print("No Entries Today or Some Issue Occured!")
+        sys.exit()
+        
+
+    print("Moving downloaded file to the root folder.")
     time.sleep(3)
-    accept_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#onetrust-accept-btn-handler")))
-    accept_button.click()
-    time.sleep(1)
-except Exception:
-    print("Terms pop up not present. Moving to next step.")
-
-# Step 6: Search for rule
-print("Checking if there is some content in the search bar.")
-try:
-    search_bar_close = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-query-delete")))
-    search_bar_close.click()
-except Exception:
-    print("No content in searchbar. Proceeding with next steps.")
-search_bar = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-bar")))
-search_bar.send_keys(config.SEARCH_BAR_INPUT)
-search_icon = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#search-query-icon")))
-search_icon.click()
-
-# Step 7: Check for today's entries
-entry_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#forms-action-entries-adobe-creative-cloud-access-spring-2025")))
-entry_button.click()
-
-try:
-    # Ensure checkbox is visible before interacting
-    select_all_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#table-select-all")))
-
-    # Function to click and retry if checkbox is unchecked
-    def click_with_retry(element):
-        while not element.is_selected():
-            print("Element was not clicked, clicking again...")
-            # Attempt to click the checkbox
-            element.click()
-
-            # Retry clicking if the checkbox is not selected
-            time.sleep(3)  # Small delay to allow UI to update
-
-        # Confirm element is selected
-        print(f"Element checked status: {element.is_selected()}")
-
-    # Click the checkbox and retry if necessary
-    click_with_retry(select_all_button)
-
-    # Click Download
-    download_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "#entries-bulk-download")))
-    download_button.click()
-
-    time.sleep(3)
-
-    # Wait for the download options container
-    download_options = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, ".download-options")))
-
-    # Click the second button (Excel)
-    excel_button = download_options.find_element(By.CSS_SELECTOR, "button:nth-child(1)")
-    excel_button.click()
-    print("Today's entries must be downloaded.")
-
-except Exception:
-    print("No Entries Today or Some Issue Occured!")
-
-print("Moving downloaded file to the root folder.")
-time.sleep(3)
-try:
-    shutil.move(config.WUFOO_SOURCE_PATH, config.WUFOO_DST_PATH)
-except Exception:
-    print("Error occured while moving file to root folder! Please retry.")
+    try:
+        shutil.move(config.WUFOO_SOURCE_PATH, config.WUFOO_DST_PATH)
+    except Exception:
+        print("Error occured while moving file to root folder! Please retry.")
+        sys.exit()
 
 # Step 8: Login into Adobe
 browser.get(config.ADOBE_URL)
@@ -181,6 +186,7 @@ try:
     browser.execute_script("arguments[0].click();", admin_console_link)
 except Exception as e:
     print("Failed to click on 'Go to Admin Console'. Error:", str(e))
+    sys.exit()
 time.sleep(5)
 browser.switch_to.window(browser.window_handles[1])
 
@@ -248,7 +254,8 @@ for obj in email_list:
     time.sleep(1)
     apply_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "section[data-testid='user-group-assignment-modal'] button[data-testid='cta-button']")))
     apply_button.click()
-    # save_button= wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "[data-testid='cta-button']")))
+    save_button= wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "section[id='add-users-to-org-modal'] [data-testid='cta-button']")))
+    save_button.click()
 
 input("Press Enter to close the Program:")
 if os.path.exists(config.WUFOO_DST_PATH):
